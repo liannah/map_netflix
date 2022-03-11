@@ -1,5 +1,4 @@
 library(dash)
-library(dashCoreComponents)
 library(dashHtmlComponents)
 library(ggplot2)
 library(plotly)
