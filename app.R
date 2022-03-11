@@ -1,18 +1,17 @@
 library(dash)
 library(dashCoreComponents)
 library(dashHtmlComponents)
-library(dashBootstrapComponents)
 library(ggplot2)
 library(plotly)
 
 app <- Dash$new(external_stylesheets = dbcThemes$BOOTSTRAP)
 
-msleep2 <- readr::read_csv(here::here('data', 'msleep.csv'))
+movies <- readr::read_csv(here::here('data', 'processed/netflix_movies_genres.csv'))
 
 app$layout(
     dbcContainer(
         list(
-            htmlH1('Dashr heroky deployment'),
+            htmlH1('NetViz - Netflix Movies Visualization Dashboard'),
             dccGraph(id='plot-area'),
             htmlDiv(id='output-area'),
             htmlBr(),
@@ -20,8 +19,8 @@ app$layout(
             htmlBr(),
             dccDropdown(
                 id='col-select',
-                options = msleep2 %>% colnames %>% purrr::map(function(col) list(label = col, value = col)),
-                value='bodywt')
+                options = unique(movies$genre),
+                value='Comedies', )
         )
     )
 )
@@ -29,26 +28,31 @@ app$layout(
 app$callback(
     output('plot-area', 'figure'),
     list(input('col-select', 'value')),
-    function(xcol) {
-        p <- ggplot(msleep2) +
-            aes(x = !!sym(xcol),
-                y = sleep_total,
-                color = vore,
-                text = name) +
-            geom_point() +
-            scale_x_log10() +
-            ggthemes::scale_color_tableau()
-        ggplotly(p) %>% layout(dragmode = 'select')
-    }
-)
-
-app$callback(
-    list(output('output-area', 'children'),
-         output('output-area2', 'children')),
-    list(input('plot-area', 'selectedData'),
-         input('plot-area', 'hoverData')),
-    function(selected_data, hover_data) {
-        list(toString(selected_data), toString(hover_data))
+    function(type) {
+        country_df <- movies %>%
+            filter(genre == type) %>%
+            dplyr::group_by(country) %>% 
+            dplyr::count() %>% 
+            dplyr::rename(count = n, name = country)
+            
+        country_code <- readr::read_csv("https://raw.githubusercontent.com/plotly/datasets/master/2014_world_gdp_with_codes.csv") 
+        country_code <- country_code %>% 
+                dplyr::select(COUNTRY, CODE) %>% 
+                dplyr::rename(name = COUNTRY, code = CODE)
+        
+        country_df <- merge(country_df, country_code, by="name")
+        
+        fig <- plotly::plot_ly(country_df, type='choropleth', locations=~code, z=~count, text=~name,
+                               colorscale='Viridis', zmin = 0 , zmax=500,
+                               marker=list(line=list(
+                                   width=0)))
+        
+        fig <- fig %>% plotly::colorbar(title = "Movie Count")
+        fig <- fig %>% plotly::layout(
+            title = "World Map"
+        )
+        
+        fig
     }
 )
 
